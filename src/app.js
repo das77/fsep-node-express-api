@@ -8,6 +8,13 @@ const app = express();
 app.use(express.json());
 app.use(requestLogger);
 
+app.get('/', (req, res) => {
+  res.json({
+    name: 'fsep-node-express-api',
+    endpoints: ['/health', '/api/books'],
+  });
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
