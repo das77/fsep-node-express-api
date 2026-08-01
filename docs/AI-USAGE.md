@@ -1,6 +1,6 @@
 # AI Usage
 
-This project was developed with AI assistance using **Claude Code** (Anthropic's CLI coding agent) as the AI pair-programming tool. This document records how the AI was used on specific features, per the assessment requirements: the prompts/context given, what the AI suggested, whether suggestions were accepted / modified / rejected, how the generated code was validated, and the limitations encountered.
+This project was developed with AI assistance using **Github CoPilot** as the AI pair-programming tool. This document records how the AI was used on specific features, per the assessment requirements: the prompts/context given, what the AI suggested, whether suggestions were accepted / modified / rejected, how the generated code was validated, and the limitations encountered.
 
 ## Feature: Project documentation (README, ARCHITECTURE, DESIGN)
 
