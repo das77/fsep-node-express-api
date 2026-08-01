@@ -4,7 +4,10 @@ const booksService = require('../services/books.service');
 // error-handling middleware, so no try/catch wrappers are needed here.
 
 async function listBooks(req, res) {
-  const books = await booksService.getAll({ genre: req.query.genre });
+  const books = await booksService.getAll({
+    genre: req.query.genre,
+    author: req.query.author,
+  });
   res.status(200).json(books);
 }
 
