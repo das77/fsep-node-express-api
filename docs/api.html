@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>fsep-node-express-api — Live API Explorer</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; }
+    #status {
+      font-family: sans-serif;
+      padding: 2rem;
+      color: #3b4151;
+    }
+  </style>
+</head>
+<body>
+  <div id="status">
+    <h2>Connecting to the API…</h2>
+    <p>The API runs on Render's free tier and sleeps when idle — the first
+    request can take up to a minute to wake it. Hang tight.</p>
+  </div>
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    // The deployed API. If Render assigned a different URL (e.g. a suffixed
+    // name), update this one constant.
+    const API_BASE = 'https://fsep-node-express-api.onrender.com';
+
+    const status = document.getElementById('status');
+
+    // Fetch the spec from the running API itself so this page can never
+    // drift from what is actually deployed, then pin the server URL so
+    // "Try it out" executes against the Render service.
+    async function fetchSpec(attempt = 1) {
+      try {
+        const res = await fetch(`${API_BASE}/api-docs.json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        if (attempt >= 5) throw err;
+        status.querySelector('p').textContent =
+          `Still waking the API (attempt ${attempt} of 5)…`;
+        await new Promise((r) => setTimeout(r, 15000));
+        return fetchSpec(attempt + 1);
+      }
+    }
+
+    fetchSpec()
+      .then((spec) => {
+        spec.servers = [{ url: API_BASE, description: 'Render deployment' }];
+        status.remove();
+        SwaggerUIBundle({
+          spec,
+          dom_id: '#swagger-ui',
+          tryItOutEnabled: true,
+        });
+      })
+      .catch((err) => {
+        status.innerHTML =
+          '<h2>Could not reach the API</h2>' +
+          `<p>Failed to load <code>${API_BASE}/api-docs.json</code> (${err.message}). ` +
+          'The Render service may be down, still deploying, or the URL above may have changed.</p>';
+      });
+  </script>
+</body>
+</html>
