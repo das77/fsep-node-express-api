@@ -10,6 +10,7 @@ A small Express REST API for managing a collection of **science fiction and fant
 📖 **[Documentation site](https://das77.github.io/fsep-node-express-api/)** — architecture & design docs, published from `docs/` via GitHub Pages.
 <!-- PAGES-LINK:END -->
 
+- [Live API Explorer](https://das77.github.io/fsep-node-express-api/api.html) — Swagger UI on the docs site, executing against the Render deployment
 - [Architecture](docs/ARCHITECTURE.md) — layers, module dependencies, request pipeline
 - [Design](docs/DESIGN.md) — API design decisions, data model, trade-offs
 - [AI Usage](docs/AI-USAGE.md) — how AI assistance was used and validated during development
@@ -19,6 +20,7 @@ A small Express REST API for managing a collection of **science fiction and fant
 - **Full CRUD** for books at `/api/books` with proper HTTP methods and status codes
 - **Filtering & search** — `?genre=fantasy`, `?author=tolkien` (case-insensitive substring match, filters compose)
 - **Custom middleware** — request logging, body validation, id validation, centralized error handling
+- **Interactive API docs** — Swagger UI at `/api-docs` with "Try it out" against the live server; raw OpenAPI 3.0.3 spec at `/api-docs.json`
 - **CommonJS** module system with async/await throughout
 - **JSON-file persistence** via `fs/promises` — survives restarts, cached in memory
 

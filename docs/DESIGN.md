@@ -18,7 +18,7 @@ Ids are assigned server-side and never accepted from the client — a `POST` bod
 
 ## Endpoint design
 
-URLs follow REST resource conventions: a plural-noun collection (`/api/books`) and item addressing by id (`/api/books/:id`). The `/api` prefix separates the resource API from infrastructure endpoints (`/`, `/health`).
+URLs follow REST resource conventions: a plural-noun collection (`/api/books`) and item addressing by id (`/api/books/:id`). The `/api` prefix separates the resource API from infrastructure endpoints (`/`, `/health`, `/api-docs`).
 
 ```mermaid
 flowchart LR
@@ -92,6 +92,18 @@ Every error response has the same JSON shape:
 ```
 
 (`details` appears only on validation failures.) Services signal errors by throwing an `Error` with a `status` property; a single centralized error handler translates them into responses and defaults anything unmarked to 500. Server-side stack traces are logged only for 5xx — 4xx are expected client behavior, not incidents. Internals (stack traces, file paths) are never leaked into responses.
+
+## API documentation: hand-written OpenAPI, served by the app
+
+The API ships an interactive Swagger page at `/api-docs` ("Try it out" executes real requests) backed by a spec at `/api-docs.json`. Three deliberate choices:
+
+**Hand-written spec over annotation-generated.** The OpenAPI 3.0.3 document lives in one reviewable file (`src/docs/openapi.json`) rather than being assembled from JSDoc comments scattered across route files. At seven routes, one explicit file is easier to audit against DESIGN.md's contract than generation config — and the spec can state things the code doesn't express directly (examples, the `Location` header, field-level descriptions). The accepted cost is drift risk: a route change requires a matching spec edit. Tests that assert on the spec's paths give partial protection.
+
+**The app serves its own spec.** `/api-docs.json` comes from the running server, so whatever is deployed *is* the documentation source. The static API Explorer on the docs site (`docs/api.html`, GitHub Pages) fetches the spec from the deployed API rather than bundling a copy — the explorer can be stale in appearance (CDN-loaded Swagger UI) but never in content.
+
+**Relative `servers` URL.** The spec declares `servers: [{"url": "/"}]`, so the in-app UI targets whichever origin serves it — no environment-specific spec builds. The Pages explorer, which runs on a different origin, overrides the server URL at load time to point at the Render deployment.
+
+**CORS is deliberately open** (`Access-Control-Allow-Origin: *`): the Pages explorer calls the API cross-origin, and this is a public demo API with no credentials or per-user data. CORS restrictions protect users of credentialed APIs, not servers — anything a browser is blocked from, `curl` can do anyway — so restricting origins here would add configuration without adding safety.
 
 ## Persistence: JSON file over a database
 
