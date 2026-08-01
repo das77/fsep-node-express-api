@@ -1,7 +1,11 @@
 const fs = require('fs/promises');
 const path = require('path');
 
-const DATA_FILE = path.join(__dirname, '..', 'data', 'books.json');
+// BOOKS_DATA_FILE lets tests point the store at a throwaway copy of the
+// seed data instead of mutating the real file.
+const DATA_FILE = process.env.BOOKS_DATA_FILE
+  ? path.resolve(process.env.BOOKS_DATA_FILE)
+  : path.join(__dirname, '..', 'data', 'books.json');
 
 // In-memory cache of the JSON file; loaded once, persisted on every mutation.
 let books = null;

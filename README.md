@@ -2,6 +2,16 @@
 
 A small Express REST API for managing a collection of **science fiction and fantasy books**. It demonstrates layered Express architecture (routes → controllers → services), custom middleware, REST conventions, and a file-backed in-memory data store — no database required.
 
+## Documentation
+
+<!-- PAGES-LINK:START -->
+📖 **[Documentation site](https://das77.github.io/fsep-node-express-api/)** — architecture & design docs, published from `docs/` via GitHub Pages.
+<!-- PAGES-LINK:END -->
+
+- [Architecture](docs/ARCHITECTURE.md) — layers, module dependencies, request pipeline
+- [Design](docs/DESIGN.md) — API design decisions, data model, trade-offs
+- [AI Usage](docs/AI-USAGE.md) — how AI assistance was used and validated during development
+
 ## Features
 
 - **Full CRUD** for books at `/api/books` with proper HTTP methods and status codes
@@ -54,12 +64,6 @@ src/
 ├── middleware/          # requestLogger, validateBook, validateId, errorHandler
 └── data/books.json      # Seed data / persistent store
 ```
-
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md) — layers, module dependencies, request pipeline
-- [Design](docs/DESIGN.md) — API design decisions, data model, trade-offs
-- [AI Usage](docs/AI-USAGE.md) — how AI assistance was used and validated during development
 
 ## License
 

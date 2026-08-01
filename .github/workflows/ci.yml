@@ -12,6 +12,26 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: npm test (95% coverage gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          # Matches local development; the built-in test runner's coverage
+          # flags used by `npm test` require Node 20+.
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install from committed lockfile
+        run: npm ci
+
+      - name: Run tests (fails below 95% line/branch/function coverage)
+        run: npm test
+
   npm-audit:
     name: npm audit
     runs-on: ubuntu-latest
