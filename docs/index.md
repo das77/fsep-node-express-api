@@ -1,4 +1,4 @@
-# TRHS Lacrosse Treasury — Documentation
+# FSEP Node-Express API — Documentation
 
 - [Architecture](ARCHITECTURE.md)
 - [Design](DESIGN.md)
