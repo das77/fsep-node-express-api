@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "title": "Dune",
+    "author": "Frank Herbert",
+    "genre": "science-fiction",
+    "year": 1965
+  },
+  {
+    "id": 2,
+    "title": "The Left Hand of Darkness",
+    "author": "Ursula K. Le Guin",
+    "genre": "science-fiction",
+    "year": 1969
+  },
+  {
+    "id": 3,
+    "title": "Neuromancer",
+    "author": "William Gibson",
+    "genre": "science-fiction",
+    "year": 1984
+  },
+  {
+    "id": 4,
+    "title": "The Hobbit",
+    "author": "J.R.R. Tolkien",
+    "genre": "fantasy",
+    "year": 1937
+  },
+  {
+    "id": 5,
+    "title": "A Wizard of Earthsea",
+    "author": "Ursula K. Le Guin",
+    "genre": "fantasy",
+    "year": 1968
+  },
+  {
+    "id": 6,
+    "title": "The Name of the Wind",
+    "author": "Patrick Rothfuss",
+    "genre": "fantasy",
+    "year": 2007
+  }
+]
