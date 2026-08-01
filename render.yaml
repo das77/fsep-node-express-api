@@ -1,0 +1,15 @@
+# Render Blueprint — deploys the API as a free web service.
+# In the Render dashboard: New → Blueprint → select this repo, and Render
+# provisions everything below. The service URL will be
+# https://<service-name>.onrender.com (suffixed if the name is taken).
+services:
+  - type: web
+    name: fsep-node-express-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"

@@ -25,7 +25,27 @@ test('GET / returns the API index', async () => {
   const res = await request(app).get('/');
   assert.equal(res.status, 200);
   assert.equal(res.body.name, 'fsep-node-express-api');
-  assert.deepEqual(res.body.endpoints, ['/health', '/api/books']);
+  assert.deepEqual(res.body.endpoints, ['/health', '/api/books', '/api-docs']);
+});
+
+test('GET /api-docs serves the Swagger UI page', async () => {
+  const res = await request(app).get('/api-docs/');
+  assert.equal(res.status, 200);
+  assert.match(res.headers['content-type'], /text\/html/);
+  assert.match(res.text, /swagger-ui/i);
+});
+
+test('GET /api-docs.json serves the OpenAPI spec', async () => {
+  const res = await request(app).get('/api-docs.json');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.openapi, '3.0.3');
+  assert.ok(res.body.paths['/api/books']);
+  assert.ok(res.body.paths['/api/books/{id}']);
+});
+
+test('responses carry CORS headers for cross-origin callers', async () => {
+  const res = await request(app).get('/api/books').set('Origin', 'https://das77.github.io');
+  assert.equal(res.headers['access-control-allow-origin'], '*');
 });
 
 test('GET /health returns ok', async () => {

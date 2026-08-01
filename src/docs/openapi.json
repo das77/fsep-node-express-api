@@ -1,0 +1,251 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "fsep-node-express-api",
+    "description": "A small Express REST API managing a collection of science fiction and fantasy books. Full CRUD with validation, filtering, and centralized error handling.",
+    "version": "1.0.0",
+    "license": {
+      "name": "GPL-3.0",
+      "url": "https://www.gnu.org/licenses/gpl-3.0.html"
+    }
+  },
+  "servers": [{ "url": "/", "description": "This server" }],
+  "tags": [
+    { "name": "books", "description": "Book collection operations" },
+    { "name": "meta", "description": "API index and health" }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["meta"],
+        "summary": "API index",
+        "operationId": "getIndex",
+        "responses": {
+          "200": {
+            "description": "API name and available endpoints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string", "example": "fsep-node-express-api" },
+                    "endpoints": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "example": ["/health", "/api/books", "/api-docs"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["meta"],
+        "summary": "Health check",
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Service is up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string", "example": "ok" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/books": {
+      "get": {
+        "tags": ["books"],
+        "summary": "List books",
+        "description": "Returns all books. Filters compose: genre is an exact match, author is a case-insensitive substring match.",
+        "operationId": "listBooks",
+        "parameters": [
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["science-fiction", "fantasy"] },
+            "description": "Exact-match genre filter"
+          },
+          {
+            "name": "author",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "example": "tolkien",
+            "description": "Case-insensitive substring match on the author name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching books (possibly empty)",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Book" } }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["books"],
+        "summary": "Create a book",
+        "operationId": "createBook",
+        "requestBody": { "$ref": "#/components/requestBodies/BookInput" },
+        "responses": {
+          "201": {
+            "description": "Book created; Location header points at the new resource",
+            "headers": {
+              "Location": {
+                "schema": { "type": "string", "example": "/api/books/7" },
+                "description": "URL of the created book"
+              }
+            },
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Book" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/api/books/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "integer", "minimum": 1 },
+          "description": "Book id (positive integer; anything else returns 400)"
+        }
+      ],
+      "get": {
+        "tags": ["books"],
+        "summary": "Get one book",
+        "operationId": "getBook",
+        "responses": {
+          "200": {
+            "description": "The book",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Book" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/InvalidId" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "tags": ["books"],
+        "summary": "Replace a book",
+        "description": "Full replacement — the body must pass the same complete validation as create. The id itself is immutable.",
+        "operationId": "updateBook",
+        "requestBody": { "$ref": "#/components/requestBodies/BookInput" },
+        "responses": {
+          "200": {
+            "description": "The updated book",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Book" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/ValidationError" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["books"],
+        "summary": "Delete a book",
+        "operationId": "deleteBook",
+        "responses": {
+          "204": { "description": "Deleted; no response body" },
+          "400": { "$ref": "#/components/responses/InvalidId" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Book": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "readOnly": true, "example": 1 },
+          "title": { "type": "string", "example": "Dune" },
+          "author": { "type": "string", "example": "Frank Herbert" },
+          "genre": { "type": "string", "enum": ["science-fiction", "fantasy"] },
+          "year": { "type": "integer", "example": 1965 }
+        },
+        "required": ["id", "title", "author", "genre", "year"]
+      },
+      "BookInput": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "example": "Hyperion" },
+          "author": { "type": "string", "example": "Dan Simmons" },
+          "genre": { "type": "string", "enum": ["science-fiction", "fantasy"] },
+          "year": { "type": "integer", "example": 1989 }
+        },
+        "required": ["title", "author", "genre", "year"]
+      },
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } },
+        "required": ["error"]
+      },
+      "ValidationErrorBody": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string", "example": "Validation failed" },
+          "details": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["title is required and must be a non-empty string"]
+          }
+        },
+        "required": ["error", "details"]
+      }
+    },
+    "requestBodies": {
+      "BookInput": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/BookInput" } }
+        }
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "description": "No book with that id",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Book with id 99 not found" }
+          }
+        }
+      },
+      "InvalidId": {
+        "description": "Malformed id (not a positive integer)",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Invalid book id: abc" }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Request body failed validation; details lists every failing field",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/ValidationErrorBody" } }
+        }
+      }
+    }
+  }
+}

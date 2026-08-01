@@ -50,6 +50,22 @@ The AI had the existing `ci.yml` as context — a single `npm-audit` job that is
 
 **Limitations encountered.** The inherent one: a workflow file is only truly tested by the platform that runs it. Local replay covers the commands but not the Actions environment (runner image, cache behavior, permissions), so the first CI run on this branch's PR is part of the validation, not a formality.
 
+## Feature: Interactive Swagger page
+
+**Prompt / context provided.** A one-line feature request:
+
+> I want to create a swagger page for this app that will execute all APIs
+
+The AI had the full codebase as context, including the documented status-code contract in DESIGN.md and the existing test suite with its enforced coverage gate.
+
+**What the AI suggested.** `swagger-ui-express` serving a **hand-written OpenAPI 3.0.3 spec** (`src/docs/openapi.json`) at `/api-docs`, rather than generating the spec from JSDoc annotations — for an API this size, one explicit spec file is easier to review than annotations scattered across route files. The spec encodes the API's real contract: genre enum and author substring-match query parameters, the `Location` header on 201, and every error shape. Two details matter for the "execute all APIs" requirement: the spec's `servers` URL is relative (`/`), so Swagger UI's "Try it out" fires requests against whatever origin serves the page, and the UI is mounted *before* the 404 catch-all (the middleware-ordering lesson from the root-route bug, applied). The raw spec is also exposed at `/api-docs.json` for tooling.
+
+**Accepted, modified, or rejected.** Accepted, including two follow-through changes the prompt didn't ask for: the root index and README were updated to advertise `/api-docs`, and the existing index-route test — which asserts the exact endpoints list — was updated along with two new tests covering the UI page and the spec endpoint, keeping the 95% coverage gate green (24/24 tests, 100% line coverage).
+
+**Validation.** Three layers: the spec passed `swagger-cli validate`; the running server was probed live (`/api-docs` redirects to the UI page, which serves the Swagger UI HTML; `/api-docs.json` returns the spec; the index lists the new endpoint); and the full test suite passed under the coverage thresholds. The "Try it out" *click* itself was not automated — a browser is required — but the mechanism it depends on (valid spec + relative server URL + same-origin serving) was verified piecewise.
+
+**Limitations encountered.** The spec is hand-maintained, not generated, so it can drift from the code silently; the two tests asserting on the spec's paths give partial protection, but a route behavior change would need a matching spec edit. This is the accepted cost of choosing spec-as-one-file over annotation-generated docs.
+
 ## General observations
 
 - **Tooling failures need fallbacks.** The `gh pr edit` CLI command failed against this repository due to a known GitHub CLI bug (a deprecated GraphQL `projectCards` field). The AI worked around it by calling the GitHub REST API directly (`gh api -X PATCH .../pulls/N`). AI agents that can only follow the happy path stall on this class of environmental failure.
