@@ -2,6 +2,8 @@
 
 A small Express REST API for managing a collection of **science fiction and fantasy books**. It demonstrates layered Express architecture (routes → controllers → services), custom middleware, REST conventions, and a file-backed in-memory data store — no database required.
 
+🚀 **Live site:** [fsep-node-express-api.onrender.com](https://fsep-node-express-api.onrender.com/) — try [`/api/books`](https://fsep-node-express-api.onrender.com/api/books) or the interactive [Swagger UI](https://fsep-node-express-api.onrender.com/api-docs). Runs on Render's free tier, so the first request after idle can take up to a minute to wake the service; data resets to the seed books on each deploy.
+
 ## Documentation
 
 <!-- PAGES-LINK:START -->
