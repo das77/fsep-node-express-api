@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - 'docs/**'
+      - "docs/**"
   issue_comment:
     types: [created]
 
@@ -39,6 +39,6 @@ jobs:
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          gemini_model: 'gemini-3.5-flash'
-          language: 'English (UK)'           # Optional (e.g. English (UK), French, Spanish)
+          gemini_model: "gemini-3.5-flash-lite"
+          language: "English (UK)" # Optional (e.g. English (UK), French, Spanish)
           # timeout: '60'                     # Optional API timeout in seconds
