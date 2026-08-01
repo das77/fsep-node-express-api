@@ -24,9 +24,16 @@ function notFound(id) {
   return err;
 }
 
-async function getAll({ genre } = {}) {
-  const all = await load();
-  return genre ? all.filter((b) => b.genre === genre) : all;
+async function getAll({ genre, author } = {}) {
+  let result = await load();
+  if (genre) {
+    result = result.filter((b) => b.genre === genre);
+  }
+  if (author) {
+    const needle = author.toLowerCase();
+    result = result.filter((b) => b.author.toLowerCase().includes(needle));
+  }
+  return result;
 }
 
 async function getById(id) {
