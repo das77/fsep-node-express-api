@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test --experimental-test-coverage --test-coverage-exclude='tests/**' --test-coverage-lines=95 --test-coverage-branches=95 --test-coverage-functions=95"
   },
   "repository": {
     "type": "git",
@@ -24,6 +24,7 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
   }
 }
