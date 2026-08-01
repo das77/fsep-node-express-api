@@ -1,0 +1,37 @@
+name: CI
+
+# Dependency vulnerability scanning (spec: Security Hardening → Dependency hygiene).
+# Runs on every PR and on pushes to main. The docs Pages build lives in pages.yml
+# and is intentionally left untouched.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm audit (frontend deps)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install from committed lockfile
+        run: npm ci
+
+      - name: Audit (advisory — does not fail the build yet)
+        # Deliberately softer than the Python gate: npm's transitive dev-dep
+        # advisories are noisy. Reports High+ findings without failing; flip to
+        # gating (drop the `|| true`) once the frontend baseline is clean.
+        run: npm audit --audit-level=high || true
