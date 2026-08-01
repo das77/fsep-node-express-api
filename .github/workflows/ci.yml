@@ -13,11 +13,11 @@ permissions:
 
 jobs:
   npm-audit:
-    name: npm audit (frontend deps)
+    name: npm audit
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: .
     steps:
       - uses: actions/checkout@v7
 
