@@ -36,6 +36,7 @@ The server listens on `http://localhost:3000` by default; set `PORT` in a `.env`
 | -------- | ------ | ------------- | --------- | -------- |
 | GET | `/` | API index | 200 | |
 | GET | `/health` | Health check | 200 | |
+| GET | `/api-docs` | Interactive Swagger UI (try out every endpoint) | 200 | |
 | GET | `/api/books` | List books; supports `?genre=` and `?author=` | 200 | |
 | GET | `/api/books/:id` | Get one book | 200 | 400, 404 |
 | POST | `/api/books` | Create a book | 201 | 400 |
