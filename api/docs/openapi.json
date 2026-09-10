@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "fsep-node-express-api",
-    "description": "A small Express REST API managing a collection of science fiction and fantasy books. Full CRUD with validation, filtering, and centralized error handling.",
+    "description": "A small Express REST API managing a collection of science fiction and fantasy books, backed by MongoDB. Full CRUD with validation, filtering, and centralized error handling.",
     "version": "1.0.0",
     "license": {
       "name": "GPL-3.0",
@@ -81,7 +81,6 @@
             "in": "query",
             "required": false,
             "schema": { "type": "string" },
-            "example": "tolkien",
             "description": "Case-insensitive substring match on the author name"
           }
         ],
@@ -106,7 +105,7 @@
             "description": "Book created; Location header points at the new resource",
             "headers": {
               "Location": {
-                "schema": { "type": "string", "example": "/api/books/7" },
+                "schema": { "type": "string", "example": "/api/books/652c1f4e8a1b2c3d4e5f6a7b" },
                 "description": "URL of the created book"
               }
             },
@@ -124,8 +123,8 @@
           "name": "id",
           "in": "path",
           "required": true,
-          "schema": { "type": "integer", "minimum": 1 },
-          "description": "Book id (positive integer; anything else returns 400)"
+          "schema": { "type": "string", "pattern": "^[a-f0-9]{24}$" },
+          "description": "Book id (24-character hex MongoDB ObjectId; anything else returns 400)"
         }
       ],
       "get": {
@@ -177,7 +176,12 @@
       "Book": {
         "type": "object",
         "properties": {
-          "id": { "type": "integer", "readOnly": true, "example": 1 },
+          "id": {
+            "type": "string",
+            "readOnly": true,
+            "pattern": "^[a-f0-9]{24}$",
+            "example": "652c1f4e8a1b2c3d4e5f6a7b"
+          },
           "title": { "type": "string", "example": "Dune" },
           "author": { "type": "string", "example": "Frank Herbert" },
           "genre": { "type": "string", "enum": ["science-fiction", "fantasy"] },
@@ -232,7 +236,7 @@
         }
       },
       "InvalidId": {
-        "description": "Malformed id (not a positive integer)",
+        "description": "Malformed id (not a 24-character hex ObjectId)",
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },
