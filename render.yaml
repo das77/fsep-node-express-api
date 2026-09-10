@@ -13,3 +13,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "24"
+      # Render has no managed MongoDB; point this at a MongoDB Atlas cluster
+      # (or other hosted Mongo). Set the value in the dashboard, not here.
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: books
