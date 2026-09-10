@@ -2,10 +2,10 @@
   "name": "fsep-node-express-api",
   "version": "1.0.0",
   "description": "",
-  "main": "src/server.js",
+  "main": "api/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "node api/server.js",
+    "dev": "nodemon api/server.js",
     "test": "node --test --experimental-test-coverage --test-coverage-exclude='tests/**' --test-coverage-lines=95 --test-coverage-branches=95 --test-coverage-functions=95"
   },
   "repository": {
@@ -23,9 +23,11 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "mongodb": "^6.12.0",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^10.1.2",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
   }
