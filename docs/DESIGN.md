@@ -8,13 +8,13 @@ The API manages one resource: **books**, restricted to two genres.
 
 | Field | Type | Rules |
 | ------- | ------ | ------- |
-| `id` | integer | Server-assigned, sequential (`max(id) + 1`), immutable |
+| `id` | string | Server-assigned MongoDB ObjectId (24-hex), immutable; exposed as `id`, stored as `_id` |
 | `title` | string | Required, non-empty |
 | `author` | string | Required, non-empty |
 | `genre` | string | Required, one of `science-fiction`, `fantasy` |
 | `year` | integer | Required, `0 ≤ year ≤ current year + 1` |
 
-Ids are assigned server-side and never accepted from the client — a `POST` body containing an `id` is ignored. `update` copies only the four writable fields, so the id cannot be changed through `PUT` either.
+Ids are assigned server-side by MongoDB and never accepted from the client — the create path only ever reads `title`, `author`, `genre`, `year` from the body. `update` `$set`s only those same four fields, so the id cannot be changed through `PUT` either.
 
 ## Endpoint design
 
@@ -44,7 +44,7 @@ flowchart LR
 | 404 | Well-formed id that matches no book; any unmatched route |
 | 500 | Unexpected error (no explicit status attached) |
 
-A deliberate distinction: **malformed input is 400, missing resources are 404**. `/api/books/abc` is a client error (the id can never be valid), while `/api/books/99` is a well-formed request for something that doesn't exist.
+A deliberate distinction: **malformed input is 400, missing resources are 404**. `/api/books/abc` is a client error (the id can never be a valid ObjectId), while `/api/books/000000000000000000000000` is a well-formed request for something that doesn't exist.
 
 ### PUT semantics
 
@@ -97,7 +97,7 @@ Every error response has the same JSON shape:
 
 The API ships an interactive Swagger page at `/api-docs` ("Try it out" executes real requests) backed by a spec at `/api-docs.json`. Three deliberate choices:
 
-**Hand-written spec over annotation-generated.** The OpenAPI 3.0.3 document lives in one reviewable file (`src/docs/openapi.json`) rather than being assembled from JSDoc comments scattered across route files. At seven routes, one explicit file is easier to audit against DESIGN.md's contract than generation config — and the spec can state things the code doesn't express directly (examples, the `Location` header, field-level descriptions). The accepted cost is drift risk: a route change requires a matching spec edit. Tests that assert on the spec's paths give partial protection.
+**Hand-written spec over annotation-generated.** The OpenAPI 3.0.3 document lives in one reviewable file (`api/docs/openapi.json`) rather than being assembled from JSDoc comments scattered across route files. At seven routes, one explicit file is easier to audit against DESIGN.md's contract than generation config — and the spec can state things the code doesn't express directly (examples, the `Location` header, field-level descriptions). The accepted cost is drift risk: a route change requires a matching spec edit. Tests that assert on the spec's paths give partial protection.
 
 **The app serves its own spec.** `/api-docs.json` comes from the running server, so whatever is deployed *is* the documentation source. The static API Explorer on the docs site (`docs/api.html`, GitHub Pages) fetches the spec from the deployed API rather than bundling a copy — the explorer can be stale in appearance (CDN-loaded Swagger UI) but never in content.
 
@@ -105,18 +105,22 @@ The API ships an interactive Swagger page at `/api-docs` ("Try it out" executes 
 
 **CORS is deliberately open** (`Access-Control-Allow-Origin: *`): the Pages explorer calls the API cross-origin, and this is a public demo API with no credentials or per-user data. CORS restrictions protect users of credentialed APIs, not servers — anything a browser is blocked from, `curl` can do anyway — so restricting origins here would add configuration without adding safety.
 
-## Persistence: JSON file over a database
+## Persistence: MongoDB
 
-The assessment allows an in-memory array or JSON file. The JSON file was chosen because it:
+The store is a MongoDB `books` collection, accessed through the official `mongodb` driver (no ODM — the existing `validateBook` middleware already owns input validation, so a schema layer would duplicate it).
 
-- demonstrates `fs/promises` + `path` (a Node fundamentals requirement) in real use
-- survives restarts, making manual testing less confusing
-- keeps the service API async, so the module is signature-compatible with a future database-backed implementation
+- **Native `_id`.** Documents keep Mongo's `ObjectId` primary key. The service maps `_id` → a string `id` on every read so the HTTP contract stays a plain JSON object and `_id` never leaks.
+- **Connection lifecycle in one module.** `db.js` owns a single pooled `MongoClient`, connected once before `app.listen()`. `getDb()` throws if used before connect — a programming-error guard, not a runtime path.
+- **Seeding.** On startup, if the collection is empty, the six seed books from `api/data/books.json` are inserted. That file is now seed data only.
+- **Filtering in the query, not in JS.** `genre` is an equality match; `author` is a case-insensitive `$regex` with the user input regex-escaped.
+- **Health reflects the DB.** `GET /health` runs a `ping` command and returns `503` if Mongo is unreachable, so the container healthcheck fails when the database is down.
 
-Accepted trade-offs at this scale: whole-file rewrites on every mutation, no atomicity across concurrent writers, and a single-process assumption. All are acceptable for an assessment-sized dataset and would be solved by swapping the service internals for a real store.
+Because tests must not depend on a running database, the suite starts an in-process `mongodb-memory-server` and points `MONGODB_URI` at it before the app loads.
 
 ## Design constraints from the assessment
 
 - **CommonJS** module system (`require`/`module.exports`) — the project was originally scaffolded as ESM and converted
-- No database; no authentication; single resource
+- No authentication; single resource
 - At least one custom middleware (this app has four: logging, id validation, body validation, error handling)
+
+> The original assessment permitted an in-memory array or JSON file and required no database; an earlier version used a read-through cache over `api/data/books.json`. The store was later moved to MongoDB (see *Persistence* above); the JSON file remains as seed data.
