@@ -1,24 +1,39 @@
-const { test, before, after } = require('node:test');
+const { test, before, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs/promises');
-const os = require('node:os');
-const path = require('node:path');
+const { MongoMemoryServer } = require('mongodb-memory-server');
 
-// Point the service at a throwaway copy of the seed data BEFORE the app
-// (and therefore the service) is loaded, so tests never touch the real file.
-const SEED_FILE = path.join(__dirname, '..', 'src', 'data', 'books.json');
-const TMP_FILE = path.join(os.tmpdir(), `books-test-${process.pid}.json`);
-process.env.BOOKS_DATA_FILE = TMP_FILE;
-
-const request = require('supertest');
-const app = require('../src/app');
+// Spin up an in-process MongoDB and point the app at it BEFORE the app
+// (and therefore db.js / the service) reads the connection settings.
+let mongod;
+let db;
+let service;
+let request;
+let app;
 
 before(async () => {
-  await fs.copyFile(SEED_FILE, TMP_FILE);
+  mongod = await MongoMemoryServer.create();
+  process.env.MONGODB_URI = mongod.getUri();
+  process.env.MONGODB_DB = 'books_test';
+
+  db = require('../api/db');
+  service = require('../api/services/books.service');
+  request = require('supertest');
+  app = require('../api/app');
+
+  await db.connect();
+  // connect() is idempotent: a second call returns the same handle.
+  assert.equal(await db.connect(), db.getDb());
+});
+
+beforeEach(async () => {
+  await db.getDb().collection('books').deleteMany({});
+  await service.seed();
 });
 
 after(async () => {
-  await fs.rm(TMP_FILE, { force: true });
+  await db.close();
+  await db.close(); // safe to call when already closed
+  await mongod.stop();
 });
 
 test('GET / returns the API index', async () => {
@@ -48,7 +63,7 @@ test('responses carry CORS headers for cross-origin callers', async () => {
   assert.equal(res.headers['access-control-allow-origin'], '*');
 });
 
-test('GET /health returns ok', async () => {
+test('GET /health returns ok when the database is reachable', async () => {
   const res = await request(app).get('/health');
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, { status: 'ok' });
@@ -59,6 +74,7 @@ test('GET /api/books returns the six seeded books', async () => {
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 6);
   assert.equal(res.body[0].title, 'Dune');
+  assert.match(res.body[0].id, /^[a-f0-9]{24}$/);
 });
 
 test('GET /api/books?genre= filters by exact genre', async () => {
@@ -84,19 +100,22 @@ test('genre and author filters compose', async () => {
 });
 
 test('GET /api/books/:id returns one book', async () => {
-  const res = await request(app).get('/api/books/1');
+  const { body: list } = await request(app).get('/api/books');
+  const dune = list.find((b) => b.title === 'Dune');
+  const res = await request(app).get(`/api/books/${dune.id}`);
   assert.equal(res.status, 200);
   assert.equal(res.body.title, 'Dune');
+  assert.equal(res.body.id, dune.id);
 });
 
-test('GET /api/books/:id → 404 for an unknown id', async () => {
-  const res = await request(app).get('/api/books/99');
+test('GET /api/books/:id → 404 for a well-formed but unknown id', async () => {
+  const res = await request(app).get('/api/books/000000000000000000000000');
   assert.equal(res.status, 404);
   assert.match(res.body.error, /not found/);
 });
 
 test('malformed ids → 400 on GET, PUT, and DELETE', async () => {
-  for (const id of ['abc', '1.5', '-2', '0']) {
+  for (const id of ['abc', '1.5', '-2', '0', '123', 'zzzzzzzzzzzzzzzzzzzzzzzz']) {
     const res = await request(app).get(`/api/books/${id}`);
     assert.equal(res.status, 400, `GET id=${id}`);
     assert.match(res.body.error, /Invalid book id/);
@@ -113,13 +132,13 @@ test('POST /api/books creates a book with 201 and Location header', async () => 
     year: 1989,
   });
   assert.equal(res.status, 201);
-  assert.equal(res.headers.location, '/api/books/7');
-  assert.equal(res.body.id, 7);
+  assert.match(res.body.id, /^[a-f0-9]{24}$/);
+  assert.equal(res.headers.location, `/api/books/${res.body.id}`);
 
-  // Mutation is persisted to the data file, not just held in memory.
-  const onDisk = JSON.parse(await fs.readFile(TMP_FILE, 'utf8'));
-  assert.equal(onDisk.length, 7);
-  assert.equal(onDisk[6].title, 'Hyperion');
+  // Mutation is persisted: it comes back on a fresh read.
+  const list = await request(app).get('/api/books');
+  assert.equal(list.body.length, 7);
+  assert.ok(list.body.some((b) => b.title === 'Hyperion'));
 });
 
 test('POST with an invalid body → 400 listing every failing field', async () => {
@@ -148,7 +167,13 @@ test('POST rejects out-of-range years', async () => {
 });
 
 test('PUT /api/books/:id replaces a book', async () => {
-  const res = await request(app).put('/api/books/7').send({
+  const { body: created } = await request(app).post('/api/books').send({
+    title: 'Hyperion',
+    author: 'Dan Simmons',
+    genre: 'science-fiction',
+    year: 1989,
+  });
+  const res = await request(app).put(`/api/books/${created.id}`).send({
     title: 'Hyperion',
     author: 'Dan Simmons',
     genre: 'science-fiction',
@@ -156,16 +181,19 @@ test('PUT /api/books/:id replaces a book', async () => {
   });
   assert.equal(res.status, 200);
   assert.equal(res.body.year, 1990);
-  assert.equal(res.body.id, 7);
+  assert.equal(res.body.id, created.id);
 });
 
 test('PUT with an invalid body → 400', async () => {
-  const res = await request(app).put('/api/books/1').send({ title: 'Only a title' });
+  const { body: list } = await request(app).get('/api/books');
+  const res = await request(app)
+    .put(`/api/books/${list[0].id}`)
+    .send({ title: 'Only a title' });
   assert.equal(res.status, 400);
 });
 
-test('PUT to an unknown id → 404', async () => {
-  const res = await request(app).put('/api/books/99').send({
+test('PUT to a well-formed but unknown id → 404', async () => {
+  const res = await request(app).put('/api/books/000000000000000000000000').send({
     title: 'Ghost',
     author: 'Nobody',
     genre: 'fantasy',
@@ -175,13 +203,44 @@ test('PUT to an unknown id → 404', async () => {
 });
 
 test('DELETE /api/books/:id → 204, then the book is gone', async () => {
-  assert.equal((await request(app).delete('/api/books/7')).status, 204);
-  assert.equal((await request(app).get('/api/books/7')).status, 404);
-  assert.equal((await request(app).delete('/api/books/7')).status, 404);
+  const { body: created } = await request(app).post('/api/books').send({
+    title: 'Hyperion',
+    author: 'Dan Simmons',
+    genre: 'science-fiction',
+    year: 1989,
+  });
+  assert.equal((await request(app).delete(`/api/books/${created.id}`)).status, 204);
+  assert.equal((await request(app).get(`/api/books/${created.id}`)).status, 404);
+  assert.equal((await request(app).delete(`/api/books/${created.id}`)).status, 404);
 });
 
 test('unmatched routes → 404 JSON', async () => {
   const res = await request(app).get('/api/nope');
   assert.equal(res.status, 404);
   assert.deepEqual(res.body, { error: 'Not Found' });
+});
+
+// --- service-level checks for paths not reachable through the routes ---
+
+test('service.getById rejects a non-ObjectId string with a 404 error', async () => {
+  await assert.rejects(() => service.getById('not-an-object-id'), (err) => {
+    assert.equal(err.status, 404);
+    return true;
+  });
+});
+
+test('service.seed is a no-op when the collection already has documents', async () => {
+  const before = await db.getDb().collection('books').countDocuments();
+  await service.seed();
+  const after = await db.getDb().collection('books').countDocuments();
+  assert.equal(before, after);
+});
+
+// Must run last: it tears the connection down to exercise the failure paths.
+test('GET /health → 503 and db.getDb() throws once the connection is closed', async () => {
+  await db.close();
+  const res = await request(app).get('/health');
+  assert.equal(res.status, 503);
+  assert.deepEqual(res.body, { status: 'unavailable' });
+  assert.throws(() => db.getDb(), /not connected/);
 });
