@@ -1,0 +1,20 @@
+{
+  "name": "fsep-books-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "React SPA for the fsep-node-express-api books service",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.7"
+  }
+}
