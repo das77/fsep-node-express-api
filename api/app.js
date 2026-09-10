@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const openapiSpec = require('./docs/openapi.json');
+const db = require('./db');
 const booksRouter = require('./routes/books.routes');
 const requestLogger = require('./middleware/requestLogger');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
@@ -21,8 +22,15 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+// Reports unhealthy if the MongoDB connection can't be reached, so the
+// container HEALTHCHECK fails when the database is down.
+app.get('/health', async (req, res) => {
+  try {
+    await db.getDb().command({ ping: 1 });
+    res.json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+  }
 });
 
 app.use('/api/books', booksRouter);
