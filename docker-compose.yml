@@ -1,0 +1,57 @@
+# Runs MongoDB, the Express API, and the nginx-served React SPA as three
+# containers on one network. The client proxies /api/ to the `api` service;
+# the API talks to the `mongo` service.
+#
+#   docker compose up --build      # SPA on http://localhost:8080
+#   docker compose down            # add -v to also drop the mongo volume
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  api:
+    build: .
+    # Published so the API (and its Swagger UI at /api-docs) is reachable
+    # directly on the host; the SPA reaches it through nginx on :8080.
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: books
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  web:
+    build: ./client
+    environment:
+      # Reachable from the web container: the `api` service name on the
+      # compose network. NOT localhost.
+      API_URL: http://api:3000
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
