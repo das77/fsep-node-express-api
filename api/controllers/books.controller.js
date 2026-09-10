@@ -12,7 +12,7 @@ async function listBooks(req, res) {
 }
 
 async function getBook(req, res) {
-  const book = await booksService.getById(Number(req.params.id));
+  const book = await booksService.getById(req.params.id);
   res.status(200).json(book);
 }
 
@@ -22,12 +22,12 @@ async function createBook(req, res) {
 }
 
 async function updateBook(req, res) {
-  const book = await booksService.update(Number(req.params.id), req.body);
+  const book = await booksService.update(req.params.id, req.body);
   res.status(200).json(book);
 }
 
 async function deleteBook(req, res) {
-  await booksService.remove(Number(req.params.id));
+  await booksService.remove(req.params.id);
   res.status(204).end();
 }
 
