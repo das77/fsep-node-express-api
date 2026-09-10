@@ -1,7 +1,7 @@
 const { test, mock } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { errorHandler, notFoundHandler } = require('../src/middleware/errorHandler');
+const { errorHandler, notFoundHandler } = require('../api/middleware/errorHandler');
 
 // Minimal res double capturing what the middleware sends.
 function mockRes() {

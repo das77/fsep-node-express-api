@@ -30,9 +30,9 @@ The AI had the full codebase as context, including the layered app structure and
 
 **Accepted, modified, or rejected.** Accepted, including the small production-code change for testability. One test deliberately asserts persistence by reading the temp data file from disk after a `POST`, not just checking the HTTP response.
 
-**Validation.** `npm test` runs 22 tests, all passing, with **100% line, 98.39% branch, and 100% function coverage** across every application file — above the enforced 95% gates, which were verified to be active (the script exits non-zero if thresholds are missed). A `git diff` after the run confirmed the real `src/data/books.json` was untouched, proving the isolation mechanism works.
+**Validation.** `npm test` runs 22 tests, all passing, with **100% line, 98.39% branch, and 100% function coverage** across every application file — above the enforced 95% gates, which were verified to be active (the script exits non-zero if thresholds are missed). A `git diff` after the run confirmed the real `api/data/books.json` was untouched, proving the isolation mechanism works.
 
-**Limitations encountered.** Two real tool failures during setup, both environmental rather than logical: the unquoted `tests/**` glob in the npm script was expanded by the shell before reaching Node (fixed by quoting), and `node --test tests/` failed on Node 24 because the runner would not accept a bare directory as a positional argument — the fix was relying on the runner's default `*.test.js` discovery instead. Two honest gaps in the coverage number: `src/server.js` is never imported by tests (it binds a port), so it is absent from the report rather than counted against it, and the one uncovered branch in `books.service.js` is the default (non-test) side of the `BOOKS_DATA_FILE` ternary — the path the production server takes but tests deliberately avoid.
+**Limitations encountered.** Two real tool failures during setup, both environmental rather than logical: the unquoted `tests/**` glob in the npm script was expanded by the shell before reaching Node (fixed by quoting), and `node --test tests/` failed on Node 24 because the runner would not accept a bare directory as a positional argument — the fix was relying on the runner's default `*.test.js` discovery instead. Two honest gaps in the coverage number: `api/server.js` is never imported by tests (it binds a port), so it is absent from the report rather than counted against it, and the one uncovered branch in `books.service.js` is the default (non-test) side of the `BOOKS_DATA_FILE` ternary — the path the production server takes but tests deliberately avoid.
 
 ## Feature: CI coverage gate
 
@@ -58,13 +58,27 @@ The AI had the existing `ci.yml` as context — a single `npm-audit` job that is
 
 The AI had the full codebase as context, including the documented status-code contract in DESIGN.md and the existing test suite with its enforced coverage gate.
 
-**What the AI suggested.** `swagger-ui-express` serving a **hand-written OpenAPI 3.0.3 spec** (`src/docs/openapi.json`) at `/api-docs`, rather than generating the spec from JSDoc annotations — for an API this size, one explicit spec file is easier to review than annotations scattered across route files. The spec encodes the API's real contract: genre enum and author substring-match query parameters, the `Location` header on 201, and every error shape. Two details matter for the "execute all APIs" requirement: the spec's `servers` URL is relative (`/`), so Swagger UI's "Try it out" fires requests against whatever origin serves the page, and the UI is mounted *before* the 404 catch-all (the middleware-ordering lesson from the root-route bug, applied). The raw spec is also exposed at `/api-docs.json` for tooling.
+**What the AI suggested.** `swagger-ui-express` serving a **hand-written OpenAPI 3.0.3 spec** (`api/docs/openapi.json`) at `/api-docs`, rather than generating the spec from JSDoc annotations — for an API this size, one explicit spec file is easier to review than annotations scattered across route files. The spec encodes the API's real contract: genre enum and author substring-match query parameters, the `Location` header on 201, and every error shape. Two details matter for the "execute all APIs" requirement: the spec's `servers` URL is relative (`/`), so Swagger UI's "Try it out" fires requests against whatever origin serves the page, and the UI is mounted *before* the 404 catch-all (the middleware-ordering lesson from the root-route bug, applied). The raw spec is also exposed at `/api-docs.json` for tooling.
 
 **Accepted, modified, or rejected.** Accepted, including two follow-through changes the prompt didn't ask for: the root index and README were updated to advertise `/api-docs`, and the existing index-route test — which asserts the exact endpoints list — was updated along with two new tests covering the UI page and the spec endpoint, keeping the 95% coverage gate green (24/24 tests, 100% line coverage).
 
 **Validation.** Three layers: the spec passed `swagger-cli validate`; the running server was probed live (`/api-docs` redirects to the UI page, which serves the Swagger UI HTML; `/api-docs.json` returns the spec; the index lists the new endpoint); and the full test suite passed under the coverage thresholds. The "Try it out" *click* itself was not automated — a browser is required — but the mechanism it depends on (valid spec + relative server URL + same-origin serving) was verified piecewise.
 
 **Limitations encountered.** The spec is hand-maintained, not generated, so it can drift from the code silently; the two tests asserting on the spec's paths give partial protection, but a route behavior change would need a matching spec edit. This is the accepted cost of choosing spec-as-one-file over annotation-generated docs.
+
+## Feature: MongoDB persistence + Docker Compose
+
+**Prompt / context provided.** A two-part request, with the full codebase (now including the React client and its nginx container) as context:
+
+> update the docker compose file to add a mongodb container. Update the API app to use the mongodb database to store and retrieve data.
+
+**What the AI suggested.** Three decisions were surfaced as explicit choices rather than assumed: the **native `mongodb` driver** over Mongoose (the `validateBook` middleware already owns validation, so an ODM schema would duplicate it); **switching ids from sequential integers to Mongo `ObjectId`** (idiomatic, at the cost of rippling through `validateId`, the OpenAPI spec, and ~6 tests); and **`mongodb-memory-server`** for tests so `npm test` stays self-contained with no running database. A new `db.js` owns the connection lifecycle; the service maps `_id` → a string `id` on every read so the HTTP contract is unchanged in shape. `server.js` connects and seeds before binding the port; `GET /health` now pings Mongo and returns `503` when it is down. Compose gained a `mongo` service with a named volume and healthcheck, and `depends_on: { condition: service_healthy }` chains mongo → api → web.
+
+**Accepted, modified, or rejected.** Accepted as proposed, including the follow-through doc edits (README, ARCHITECTURE, DESIGN, OpenAPI spec, `render.yaml`) the prompt didn't ask for.
+
+**Validation.** `npm test` — 28 tests, all passing, 100% line/function and 97.3% branch coverage, above the 95% gates. The full Compose stack was brought up and exercised end-to-end through the nginx proxy: seeded list, then POST → GET → PUT → DELETE against a real MongoDB, plus a container restart to confirm data survives and the seed does **not** re-run on a non-empty collection. `/health` returned 200 with Mongo up.
+
+**Limitations encountered.** `mongodb-memory-server` downloads a ~40 MB `mongod` binary on first run, so the initial `npm test` (and CI cache miss) is slow. A few defensive branches (`getDb()` before connect, the `503` health path) are only reachable from direct unit tests, not through the routes — those tests were added explicitly to keep the coverage gate honest rather than lowering it.
 
 ## General observations
 

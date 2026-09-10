@@ -4,4 +4,5 @@
 
 - [Architecture](ARCHITECTURE.md)
 - [Design](DESIGN.md)
+- [Deployment](DEPLOYMENT.md)
 - [AI Usage](AI-USAGE.md)
