@@ -14,17 +14,20 @@ flowchart TD
         R[routes/books.routes.js<br/>URL → handler mapping]
         C[controllers/books.controller.js<br/>req/res handling]
         S[services/books.service.js<br/>business logic + data access]
+    DB[db.js<br/>Mongo connection lifecycle]
     end
-    D[(src/data/books.json)]
+    D[(MongoDB<br/>books collection)]
 
     Client -->|HTTP request| A
     A --> R
     R --> C
     C --> S
-    S -->|fs/promises| D
+    S --> DB
+    DB -->|mongodb driver| D
 ```
 
-- **`server.js`** — process entry point. Loads environment variables via `dotenv`, imports the app, binds the port. Nothing else.
+- **`server.js`** — process entry point. Loads environment variables via `dotenv`, connects to MongoDB (`db.connect()`), seeds the collection if empty, then binds the port. Exits non-zero if the database is unreachable at startup.
+- **`db.js`** — owns the `MongoClient`: `connect()` (idempotent), `getDb()` (the handle, throws if not connected), `close()`. Connection settings are read from the environment at `connect()` time.
 - **`app.js`** — assembles the Express app: registers global middleware (CORS, JSON parsing, request logging), mounts the books router and the Swagger UI, and installs the terminal 404/error handlers. Exports the app *without* calling `.listen()`, so tests can import it directly (e.g. with supertest).
 - **Routes** — declare which URL + HTTP method invokes which controller, and attach per-route middleware (validation). No logic.
 - **Controllers** — translate HTTP to service calls: parse params/query, call the service, set the status code and JSON body. No business rules.
@@ -53,7 +56,7 @@ Two validation middleware run before controllers on the routes that need them:
 
 | Middleware | Applied to | Rejects with |
 | ---------- | --------- | ------------ |
-| `validateId` | `GET/PUT/DELETE /api/books/:id` | 400 if `:id` is not a positive integer |
+| `validateId` | `GET/PUT/DELETE /api/books/:id` | 400 if `:id` is not a canonical 24-hex MongoDB ObjectId |
 | `validateBook` | `POST`, `PUT /api/books` | 400 with per-field detail messages |
 
 ## Error propagation
@@ -91,18 +94,22 @@ flowchart TD
     routes --> vid[validateId.js]
     routes --> vbook[validateBook.js]
     ctrl --> svc[books.service.js]
-    svc --> data[(books.json)]
+    svc --> db[db.js]
+    db --> mongo[(MongoDB)]
+    svc -.seed.-> seedfile[(data/books.json)]
 ```
 
 ## Data layer
 
-`books.service.js` implements a **read-through cache over a JSON file**:
+`books.service.js` talks to a **MongoDB `books` collection** through the official `mongodb` driver:
 
-1. First access reads `src/data/books.json` with `fs.promises.readFile` and caches the parsed array in module scope.
-2. Reads are served from memory.
-3. Every mutation (create/update/delete) rewrites the whole file with `fs.promises.writeFile`, so data survives restarts.
+1. `db.js` holds a single pooled `MongoClient`, connected once at startup.
+2. Documents are stored with Mongo's native `_id` (an `ObjectId`). The service maps every document to the API shape `{ id: _id.toString(), title, author, genre, year }` on the way out, so `_id` never leaks past this module.
+3. Reads: `find(filter).sort({ _id: 1 })` (insertion order); `genre` is an exact match, `author` a case-insensitive `$regex` substring (input escaped).
+4. Writes: `insertOne`, `findOneAndUpdate({ returnDocument: 'after' })`, `deleteOne` — a missing document on update/delete raises a `status: 404` error.
+5. `seed()` runs once on startup: if the collection is empty, it inserts the books from `api/data/books.json` (kept only as seed data now).
 
-This is intentionally simple — a single process, small dataset, no concurrent-writer concerns. The service's public API (`getAll`, `getById`, `create`, `update`, `remove`) is fully async, so swapping the JSON file for a real database later changes only this one module.
+The service's public API (`seed`, `getAll`, `getById`, `create`, `update`, `remove`) is fully async and is the only module that imports `db.js`.
 
 ## API documentation (Swagger)
 
@@ -111,7 +118,7 @@ The API documents itself. `app.js` serves two documentation endpoints, mounted w
 - **`/api-docs`** — interactive Swagger UI (`swagger-ui-express`) where every endpoint can be executed with "Try it out"
 - **`/api-docs.json`** — the raw OpenAPI 3.0.3 spec, for tooling
 
-The spec itself is hand-written in `src/docs/openapi.json` and loaded with a plain `require` — it is part of the app, deployed with the app. Its `servers` URL is relative (`/`), so "Try it out" always executes against whichever origin is serving the UI: localhost in development, the Render URL in production.
+The spec itself is hand-written in `api/docs/openapi.json` and loaded with a plain `require` — it is part of the app, deployed with the app. Its `servers` URL is relative (`/`), so "Try it out" always executes against whichever origin is serving the UI: localhost in development, the Render URL in production.
 
 There is also a **static API Explorer** for the documentation site: `docs/api.html`, published by GitHub Pages, loads Swagger UI from a CDN and fetches the spec from the *deployed* API's `/api-docs.json` (never a local copy — so the explorer cannot drift from what is actually running). Because the Pages origin differs from the API origin, the app enables open CORS; see [DESIGN.md](DESIGN.md) for why that is acceptable here. The explorer also handles Render's free-tier cold start with a retry loop before giving up.
 
@@ -135,7 +142,10 @@ flowchart LR
 Environment variables are loaded once in `server.js` via `dotenv` from a git-ignored `.env` file:
 
 - `PORT` (default `3000`)
-- `BOOKS_DATA_FILE` — optional override of the data-file path; used by the test suite to run against a throwaway copy of the seed data
+- `MONGODB_URI` (default `mongodb://localhost:27017`) — MongoDB connection string
+- `MONGODB_DB` (default `books`) — database name
+
+The test suite sets `MONGODB_URI` to an in-process [`mongodb-memory-server`](https://github.com/typegoose/mongodb-memory-server) instance, so `npm test` needs no running database.
 
 ## CI / repository automation / deployment
 
@@ -145,4 +155,6 @@ GitHub Actions workflows in `.github/workflows/`:
 - **`gemini-review.yml`** / **`gemini-triage.yml`** — AI-assisted PR review and issue triage
 - **`pages.yml`** — publishes `docs/` (including the API Explorer page) via GitHub Pages (Jekyll config in `docs/_config.yml`)
 
-Deployment is config-as-code: **`render.yaml`** is a Render Blueprint describing the production service (free-plan Node web service, `npm ci` build, `npm start`, health checks on `/health`). The live instance runs at <https://fsep-node-express-api.onrender.com/>.
+Deployment is config-as-code: **`render.yaml`** is a Render Blueprint describing the production service (free-plan Node web service, `npm ci` build, `npm start`, health checks on `/health`). It needs a `MONGODB_URI` (set in the dashboard, not committed) pointing at a hosted MongoDB such as Atlas, since Render has no managed Mongo. The live instance runs at <https://fsep-node-express-api.onrender.com/>.
+
+**`docker-compose.yml`** runs the whole system locally as three containers: `mongo` (with a named volume), `api` (built from the root `Dockerfile`, waits for Mongo to be healthy), and `web` (the React client behind nginx, built from `client/Dockerfile`).
